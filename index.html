@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .preview {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 1px solid #000;
+        }
+
+        .table-wrapper {
+            display: inline-block;
+            margin-top: 12px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin: 12px 0 12px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="qrContainer"></div>
+
+    <form onsubmit="return submitForm()">
+        <div>
+            <select id="targetDevice"></select>
+            <input id="bladeName" value="Name" type="text" pattern="[A-Za-z0-9]{1,100}" maxlength="100"
+                required></input>
+        </div>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Preview</th>
+                        <th>RGB</th>
+                        <th>White</th>
+                        <th>Delete</th>
+                    </tr>
+                </thead>
+                <tbody id="container"></tbody>
+            </table>
+            <div class="controls">
+                <button type="button" onclick="resetAll()">RESET</button>
+                <div>
+                    <button type="button" onclick="addRow()">ADD</button>
+                    <button type="submit">UPDATE</button>
+                </div>
+            </div>
+        </div>
+
+    </form>
+
+    <script>
+        const DEVICES = { KBX5: 'KBX5' };
+        const HEADERS = {
+            [DEVICES.KBX5]: 'Copyright RUIFAN:KBX5',
+        };
+
+        function init() {
+            const targetDevice = document.getElementById("targetDevice");
+            targetDevice.replaceChildren();
+            Object.values(DEVICES).forEach(device => {
+                const option = document.createElement("option");
+                option.value = device;
+                option.textContent = device;
+                targetDevice.appendChild(option);
+            });
+            targetDevice.selectedIndex = 0;
+            targetDevice.addEventListener("change", () => {
+                const selected = targetDevice.value;
+                console.log("header:", HEADERS[selected]);
+            });
+        }
+
+        function resetAll() {
+            if (!confirm("初期化しますか？")) return;
+            document.getElementById("bladeName").value = document.getElementById("bladeName").defaultValue;
+            document.getElementById("container").replaceChildren();
+            document.getElementById("qrContainer").replaceChildren();
+            addRow();
+        }
+
+        function addRow(rgb = "ffffff", white = "00") {
+            const container = document.getElementById("container");
+            const tr = document.createElement("tr");
+
+            // RGB color picker
+            const rgbPicker = document.createElement("input");
+            rgbPicker.type = "color";
+            rgbPicker.value = "#" + rgb;
+
+            // RGB text input
+            const rgbText = document.createElement("input");
+            rgbText.type = "text";
+            rgbText.maxLength = 6;
+            rgbText.pattern = "[0-9a-f]{6}";
+            rgbText.placeholder = "RRGGBB";
+            rgbText.required = true;
+            rgbText.value = rgb;
+
+            // Sync
+            function syncFromPicker() {
+                const hex = rgbPicker.value.replace("#", "");
+                rgbText.value = hex;
+            }
+            function syncFromText() {
+                if (/^[0-9a-fA-F]{6}$/.test(rgbText.value)) {
+                    rgbPicker.value = "#" + rgbText.value;
+                }
+            }
+            rgbPicker.addEventListener("input", syncFromPicker);
+            rgbText.addEventListener("input", syncFromText);
+            syncFromPicker();
+
+            // White input
+            const whiteInput = document.createElement("input");
+            whiteInput.type = "text";
+            whiteInput.maxLength = 2;
+            whiteInput.pattern = "[0-9a-f]{2}";
+            whiteInput.placeholder = "WW";
+            whiteInput.required = true;
+            whiteInput.value = white;
+
+            // Delete Button
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.textContent = "×";
+            deleteBtn.onclick = () => tr.remove();
+
+            // Build TD
+            const previewTd = document.createElement("td");
+            previewTd.appendChild(rgbPicker);
+
+            const rgbTd = document.createElement("td");
+            rgbTd.appendChild(rgbText);
+
+            const whiteTd = document.createElement("td");
+            whiteTd.appendChild(whiteInput);
+
+            const deleteTd = document.createElement("td");
+            deleteTd.appendChild(deleteBtn);
+
+            // Append TD
+            tr.appendChild(previewTd);
+            tr.appendChild(rgbTd);
+            tr.appendChild(whiteTd);
+            tr.appendChild(deleteTd);
+
+            container.appendChild(tr);
+        }
+
+        function generateQR(source) {
+            const qrContainer = document.getElementById("qrContainer");
+            qrContainer.innerHTML = "";
+            new QRCode(qrContainer, {
+                text: source.replace(/\r\n|\r/g, "\n"),
+                width: 400,
+                height: 400,
+                correctLevel: QRCode.CorrectLevel.L,
+                version: 20,
+            });
+        }
+
+        function submitForm() {
+            const targetDevice = document.getElementById("targetDevice").value;
+            const bladeName = document.getElementById("bladeName").value;
+            const rows = document.querySelectorAll("#container tr");
+
+            if (!HEADERS[targetDevice]) {
+                alert("Device error");
+                return false;
+            }
+
+            const header = HEADERS[targetDevice];
+            const lines = [];
+
+            for (const row of rows) {
+                const inputs = row.querySelectorAll("input");
+                // const rgb = inputs[0].value.replace("#", "");
+                const rgb = inputs[1].value;
+                const white = inputs[2].value;
+                lines.push(rgb.toLowerCase() + white.toLowerCase() + "00");
+            }
+
+            const payload =
+                header + "\n" +
+                bladeName + "\n" +
+                lines.join("\n");
+
+            generateQR(payload)
+
+            return false;
+        }
+
+        init();
+        addRow();
+    </script>
+
+</body>
+
+</html>

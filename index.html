@@ -2,6 +2,7 @@
 <html>
 
 <head>
+    <title>キンブレ３次元コード作るやつ</title>
     <meta charset="UTF-8">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -9,8 +10,7 @@
             border-collapse: collapse;
         }
 
-        th,
-        td {
+        th, td {
             border: 1px solid #ccc;
             padding: 6px 10px;
             text-align: center;
@@ -41,7 +41,7 @@
 
     <div id="qrContainer"></div>
 
-    <form onsubmit="return submitForm()">
+    <form onsubmit="return execute()">
         <div>
             <select id="targetDevice"></select>
             <input id="bladeName" value="Name" type="text" pattern="[A-Za-z0-9]{1,100}" maxlength="100"
@@ -89,12 +89,11 @@
             targetDevice.selectedIndex = 0;
             targetDevice.addEventListener("change", () => {
                 const selected = targetDevice.value;
-                console.log("header:", HEADERS[selected]);
             });
         }
 
         function resetAll() {
-            if (!confirm("初期化しますか？")) return;
+            if (!confirm("初期化するわよ")) return;
             document.getElementById("bladeName").value = document.getElementById("bladeName").defaultValue;
             document.getElementById("container").replaceChildren();
             document.getElementById("qrContainer").replaceChildren();
@@ -182,7 +181,7 @@
             });
         }
 
-        function submitForm() {
+        function execute() {
             const targetDevice = document.getElementById("targetDevice").value;
             const bladeName = document.getElementById("bladeName").value;
             const rows = document.querySelectorAll("#container tr");

@@ -10,11 +10,20 @@
             border-collapse: collapse;
         }
 
-        th, td {
+        th,
+        td {
             border: 1px solid #ccc;
             padding: 6px 10px;
             text-align: center;
             vertical-align: middle;
+        }
+
+        #csvText {
+            width: 40ch;
+        }
+
+        .app-container {
+            display: inline-block;
         }
 
         .preview {
@@ -34,42 +43,60 @@
             justify-content: space-between;
             margin: 12px 0 12px 0;
         }
+
+        .bulk-add-wrapper {
+            margin-top: 32px;
+            padding: 12px 0 12px 0;
+            border: #ccc solid 1px;
+            text-align: center;
+            vertical-align: middle;
+        }
     </style>
 </head>
 
 <body>
+    <div class="app-container">
+        <div id="qrContainer"></div>
 
-    <div id="qrContainer"></div>
+        <form onsubmit="return updateQr()">
+            <div>
+                <select id="targetDevice"></select>
+                <input id="bladeName" value="Name" type="text" pattern="[A-Za-z0-9]{1,100}" maxlength="100"
+                    required></input>
+            </div>
 
-    <form onsubmit="return execute()">
-        <div>
-            <select id="targetDevice"></select>
-            <input id="bladeName" value="Name" type="text" pattern="[A-Za-z0-9]{1,100}" maxlength="100"
-                required></input>
-        </div>
-
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Preview</th>
-                        <th>RGB</th>
-                        <th>White</th>
-                        <th>Delete</th>
-                    </tr>
-                </thead>
-                <tbody id="container"></tbody>
-            </table>
-            <div class="controls">
-                <button type="button" onclick="resetAll()">RESET</button>
-                <div>
-                    <button type="button" onclick="addRow()">ADD</button>
-                    <button type="submit">UPDATE</button>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Preview</th>
+                            <th>RGB</th>
+                            <th>White</th>
+                            <th>Delete</th>
+                        </tr>
+                    </thead>
+                    <tbody id="colorRowsContainer"></tbody>
+                </table>
+                <div class="controls">
+                    <button type="button" onclick="resetAll()">リセット</button>
+                    <div>
+                        <button type="button" onclick="addRow()">行を追加</button>
+                        <button type="submit">３次元コード生成</button>
+                    </div>
                 </div>
             </div>
+
+        </form>
+
+        <div class="bulk-add-wrapper">
+            <form onsubmit="return bulkAdd()">
+                <input id="csvText" type="text" placeholder="カンマ区切りカラーコード(6 or 8桁)"></input>
+                <button type="submit">一括追加</button>
+            </form>
         </div>
 
-    </form>
+    </div>
+
 
     <script>
         const DEVICES = { KBX5: 'KBX5' };
@@ -95,13 +122,13 @@
         function resetAll() {
             if (!confirm("初期化するわよ")) return;
             document.getElementById("bladeName").value = document.getElementById("bladeName").defaultValue;
-            document.getElementById("container").replaceChildren();
+            document.getElementById("colorRowsContainer").replaceChildren();
             document.getElementById("qrContainer").replaceChildren();
             addRow();
         }
 
         function addRow(rgb = "ffffff", white = "00") {
-            const container = document.getElementById("container");
+            const colorRowsContainer = document.getElementById("colorRowsContainer");
             const tr = document.createElement("tr");
 
             // RGB color picker
@@ -166,7 +193,7 @@
             tr.appendChild(whiteTd);
             tr.appendChild(deleteTd);
 
-            container.appendChild(tr);
+            colorRowsContainer.appendChild(tr);
         }
 
         function generateQR(source) {
@@ -181,10 +208,10 @@
             });
         }
 
-        function execute() {
+        function updateQr() {
             const targetDevice = document.getElementById("targetDevice").value;
             const bladeName = document.getElementById("bladeName").value;
-            const rows = document.querySelectorAll("#container tr");
+            const rows = document.querySelectorAll("#colorRowsContainer tr");
 
             if (!HEADERS[targetDevice]) {
                 alert("Device error");
@@ -209,6 +236,27 @@
 
             generateQR(payload)
 
+            return false;
+        }
+
+        function bulkAdd() {
+            const text = document.getElementById("csvText").value;
+            if (!text) return false;
+
+            text.split(",").forEach(entry => {
+                const value = entry.trim().replace(/^#/, "");
+
+                if (!/^[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(value)) return;
+
+                const rgb = value.slice(0, 6);
+                const white = value.length === 8 ? value.slice(6, 8) : "00";
+
+                addRow(rgb, white);
+            });
+
+            document.getElementById("csvText").value = "";
+
+            updateQr();
             return false;
         }
 

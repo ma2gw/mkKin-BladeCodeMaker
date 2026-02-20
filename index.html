@@ -18,11 +18,11 @@
             vertical-align: middle;
         }
 
-        #csvText {
+        #csv-text {
             width: 40ch;
         }
 
-        .app-container {
+        #app-wrapper {
             display: inline-block;
         }
 
@@ -33,18 +33,18 @@
             border: 1px solid #000;
         }
 
-        .table-wrapper {
+        #table-wrapper {
             display: inline-block;
             margin-top: 12px;
         }
 
-        .controls {
+        #controls-wrapper {
             display: flex;
             justify-content: space-between;
             margin: 12px 0 12px 0;
         }
 
-        .bulk-add-wrapper {
+        #bulk-add-wrapper {
             margin-top: 32px;
             padding: 12px 0 12px 0;
             border: #ccc solid 1px;
@@ -55,17 +55,18 @@
 </head>
 
 <body>
-    <div class="app-container">
-        <div id="qrContainer"></div>
+    <div id="app-wrapper">
 
-        <form onsubmit="return updateQr()">
+        <div id="qr-container"></div>
+
+        <form onsubmit="return handleUpdateQr()">
             <div>
-                <select id="targetDevice"></select>
-                <input id="bladeName" value="Name" type="text" pattern="[A-Za-z0-9]{1,100}" maxlength="100"
+                <select id="target-device"></select>
+                <input id="blade-name" value="Name" type="text" pattern="[\x20-\x7E]{1,100}" maxlength="100"
                     required></input>
             </div>
 
-            <div class="table-wrapper">
+            <div id="table-wrapper">
                 <table>
                     <thead>
                         <tr>
@@ -75,9 +76,9 @@
                             <th>Delete</th>
                         </tr>
                     </thead>
-                    <tbody id="colorRowsContainer"></tbody>
+                    <tbody id="color-rows-container"></tbody>
                 </table>
-                <div class="controls">
+                <div id="controls-wrapper">
                     <button type="button" onclick="resetAll()">リセット</button>
                     <div>
                         <button type="button" onclick="addRow()">行を追加</button>
@@ -88,10 +89,11 @@
 
         </form>
 
-        <div class="bulk-add-wrapper">
-            <form onsubmit="return bulkAdd()">
-                <input id="csvText" type="text" placeholder="カンマ区切りカラーコード(6 or 8桁)"></input>
+        <div id="bulk-add-wrapper">
+            <form onsubmit="return handleBulkAdd()">
+                <input id="csv-text" type="text" placeholder="カンマ区切りカラーコード(6 or 8桁)"></input>
                 <button type="submit">一括追加</button>
+                <button type="button" onclick="applyCsvTextFromTable()">表から取得</button>
             </form>
         </div>
 
@@ -103,9 +105,10 @@
         const HEADERS = {
             [DEVICES.KBX5]: 'Copyright RUIFAN:KBX5',
         };
+        const RESERVED_SUFFIX = "00";
 
         function init() {
-            const targetDevice = document.getElementById("targetDevice");
+            const targetDevice = document.getElementById("target-device");
             targetDevice.replaceChildren();
             Object.values(DEVICES).forEach(device => {
                 const option = document.createElement("option");
@@ -121,14 +124,21 @@
 
         function resetAll() {
             if (!confirm("初期化するわよ")) return;
-            document.getElementById("bladeName").value = document.getElementById("bladeName").defaultValue;
-            document.getElementById("colorRowsContainer").replaceChildren();
-            document.getElementById("qrContainer").replaceChildren();
+            document.getElementById("blade-name").value = document.getElementById("blade-name").defaultValue;
+            document.getElementById("color-rows-container").replaceChildren();
+            document.getElementById("qr-container").replaceChildren();
             addRow();
+            handleUpdateQr();
         }
 
+        /**
+         * カラー入力行をテーブルに追加する。
+         * @param {string} [rgb="ffffff"] RGB値
+         * @param {string} [white="00"] White値
+         * @returns {void}
+         */
         function addRow(rgb = "ffffff", white = "00") {
-            const colorRowsContainer = document.getElementById("colorRowsContainer");
+            const colorRowsContainer = document.getElementById("color-rows-container");
             const tr = document.createElement("tr");
 
             // RGB color picker
@@ -165,7 +175,6 @@
             whiteInput.maxLength = 2;
             whiteInput.pattern = "[0-9a-f]{2}";
             whiteInput.placeholder = "WW";
-            whiteInput.required = true;
             whiteInput.value = white;
 
             // Delete Button
@@ -196,8 +205,13 @@
             colorRowsContainer.appendChild(tr);
         }
 
+        /**
+         * 指定した文字列からQRコードを生成する。
+         * @param {string} source QRコードに埋め込む文字列
+         * @returns {void}
+         */
         function generateQR(source) {
-            const qrContainer = document.getElementById("qrContainer");
+            const qrContainer = document.getElementById("qr-container");
             qrContainer.innerHTML = "";
             new QRCode(qrContainer, {
                 text: source.replace(/\r\n|\r/g, "\n"),
@@ -208,10 +222,13 @@
             });
         }
 
-        function updateQr() {
-            const targetDevice = document.getElementById("targetDevice").value;
-            const bladeName = document.getElementById("bladeName").value;
-            const rows = document.querySelectorAll("#colorRowsContainer tr");
+        /**
+         * QR更新ボタンハンドラ
+         * @returns {boolean} (false)
+         */
+        function handleUpdateQr() {
+            const targetDevice = document.getElementById("target-device").value;
+            const bladeName = document.getElementById("blade-name").value;
 
             if (!HEADERS[targetDevice]) {
                 alert("Device error");
@@ -219,15 +236,10 @@
             }
 
             const header = HEADERS[targetDevice];
-            const lines = [];
+            const rawLines = getColorLinesFromTable();
 
-            for (const row of rows) {
-                const inputs = row.querySelectorAll("input");
-                // const rgb = inputs[0].value.replace("#", "");
-                const rgb = inputs[1].value;
-                const white = inputs[2].value;
-                lines.push(rgb.toLowerCase() + white.toLowerCase() + "00");
-            }
+            // RRGGBBWW00   
+            const lines = rawLines.map(l => l + RESERVED_SUFFIX);
 
             const payload =
                 header + "\n" +
@@ -239,8 +251,28 @@
             return false;
         }
 
-        function bulkAdd() {
-            const text = document.getElementById("csvText").value;
+        /**
+         * テーブルの内容からQR用カラーコード配列を生成する。
+         * @returns {string[]} rrggbbww 形式の文字列配列
+         */
+        function getColorLinesFromTable() {
+            const rows = document.querySelectorAll("#color-rows-container tr");
+            const lines = [];
+            for (const row of rows) {
+                const inputs = row.querySelectorAll("input");
+                const rgb = inputs[1].value;
+                const white = inputs[2].value;
+                lines.push(rgb.toLowerCase() + white.toLowerCase());
+            }
+            return lines;
+        }
+
+        /**
+         * 一括追加ボタンハンドラ
+         * @returns {boolean} (false)
+         */
+        function handleBulkAdd() {
+            const text = document.getElementById("csv-text").value;
             if (!text) return false;
 
             text.split(",").forEach(entry => {
@@ -254,14 +286,23 @@
                 addRow(rgb, white);
             });
 
-            document.getElementById("csvText").value = "";
+            document.getElementById("csv-text").value = "";
 
-            updateQr();
+            handleUpdateQr();
             return false;
         }
 
+        function applyCsvTextFromTable() {
+            const lines = getColorLinesFromTable();
+            const text = lines.join(",");
+            document.getElementById("csv-text").value = text;
+        }
+
+        // init
         init();
         addRow();
+        handleUpdateQr();
+
     </script>
 
 </body>

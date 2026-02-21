@@ -128,11 +128,11 @@
             document.getElementById("color-rows-container").replaceChildren();
             document.getElementById("qr-container").replaceChildren();
             addRow();
-            handleUpdateQr();
+            updateQr();
         }
 
         /**
-         * カラー入力行をテーブルに追加する。
+         * カラー入力行をテーブルに追加
          * @param {string} [rgb="ffffff"] RGB値
          * @param {string} [white="00"] White値
          * @returns {void}
@@ -145,6 +145,7 @@
             const rgbPicker = document.createElement("input");
             rgbPicker.type = "color";
             rgbPicker.value = "#" + rgb;
+            rgbPicker.onchange = () => updateQr();
 
             // RGB text input
             const rgbText = document.createElement("input");
@@ -154,6 +155,7 @@
             rgbText.placeholder = "RRGGBB";
             rgbText.required = true;
             rgbText.value = rgb;
+            rgbText.onchange = () => updateQr();
 
             // Sync
             function syncFromPicker() {
@@ -176,12 +178,18 @@
             whiteInput.pattern = "[0-9a-f]{2}";
             whiteInput.placeholder = "WW";
             whiteInput.value = white;
+            whiteInput.onchange = () => updateQr();
 
             // Delete Button
             const deleteBtn = document.createElement("button");
             deleteBtn.type = "button";
             deleteBtn.textContent = "×";
-            deleteBtn.onclick = () => tr.remove();
+            deleteBtn.addEventListener("click", () => {
+                const parent = tr.parentElement;
+                if (parent.children.length <= 1 ) return;
+                tr.remove();
+                updateQr();
+            });
 
             // Build TD
             const previewTd = document.createElement("td");
@@ -203,10 +211,11 @@
             tr.appendChild(deleteTd);
 
             colorRowsContainer.appendChild(tr);
+            updateQr();
         }
 
         /**
-         * 指定した文字列からQRコードを生成する。
+         * 指定した文字列からQRコードを生成
          * @param {string} source QRコードに埋め込む文字列
          * @returns {void}
          */
@@ -227,6 +236,15 @@
          * @returns {boolean} (false)
          */
         function handleUpdateQr() {
+            updateQr();
+            return false;
+        }
+
+        /**
+         * QR更新
+         * @returns {void}
+         */
+        function updateQr() {
             const targetDevice = document.getElementById("target-device").value;
             const bladeName = document.getElementById("blade-name").value;
 
@@ -247,12 +265,10 @@
                 lines.join("\n");
 
             generateQR(payload)
-
-            return false;
         }
 
         /**
-         * テーブルの内容からQR用カラーコード配列を生成する。
+         * テーブルの内容からQR用カラーコード配列を生成
          * @returns {string[]} rrggbbww 形式の文字列配列
          */
         function getColorLinesFromTable() {
@@ -288,10 +304,15 @@
 
             document.getElementById("csv-text").value = "";
 
-            handleUpdateQr();
+            updateQr();
             return false;
         }
 
+        /**
+         * テーブルのカラー行からCSV文字列を生成し、
+         * 一括追加用テキストボックスに反映する。
+         * @returns {void}
+         */
         function applyCsvTextFromTable() {
             const lines = getColorLinesFromTable();
             const text = lines.join(",");
@@ -301,7 +322,7 @@
         // init
         init();
         addRow();
-        handleUpdateQr();
+        updateQr();
 
     </script>
 

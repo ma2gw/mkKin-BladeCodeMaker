@@ -63,6 +63,7 @@
             <div>
                 <select id="target-device"></select>
                 <input id="blade-name" value="Name" type="text" pattern="[\x20-\x7E]{1,100}" maxlength="100"
+                    oninput="updateQr()"
                     required></input>
             </div>
 
@@ -141,13 +142,21 @@
             const colorRowsContainer = document.getElementById("color-rows-container");
             const tr = document.createElement("tr");
 
-            // RGB color picker
+            // Preview
+            const previewBox = document.createElement("div");
+            previewBox.style.width = "auto";
+            previewBox.style.height = "20px";
+            previewBox.style.border = "1px solid #ccc";
+            previewBox.style.borderRadius = "4px";
+
+            // RGB Color Picker
             const rgbPicker = document.createElement("input");
             rgbPicker.type = "color";
             rgbPicker.value = "#" + rgb;
+            rgbPicker.style.marginRight = "4px";
             rgbPicker.onchange = () => updateQr();
 
-            // RGB text input
+            // RGB Text Input
             const rgbText = document.createElement("input");
             rgbText.type = "text";
             rgbText.maxLength = 6;
@@ -157,28 +166,14 @@
             rgbText.value = rgb;
             rgbText.onchange = () => updateQr();
 
-            // Sync
-            function syncFromPicker() {
-                const hex = rgbPicker.value.replace("#", "");
-                rgbText.value = hex;
-            }
-            function syncFromText() {
-                if (/^[0-9a-fA-F]{6}$/.test(rgbText.value)) {
-                    rgbPicker.value = "#" + rgbText.value;
-                }
-            }
-            rgbPicker.addEventListener("input", syncFromPicker);
-            rgbText.addEventListener("input", syncFromText);
-            syncFromPicker();
-
-            // White input
-            const whiteInput = document.createElement("input");
-            whiteInput.type = "text";
-            whiteInput.maxLength = 2;
-            whiteInput.pattern = "[0-9a-f]{2}";
-            whiteInput.placeholder = "WW";
-            whiteInput.value = white;
-            whiteInput.onchange = () => updateQr();
+            // White Text Input
+            const whiteText = document.createElement("input");
+            whiteText.type = "text";
+            whiteText.maxLength = 2;
+            whiteText.pattern = "[0-9a-f]{2}";
+            whiteText.placeholder = "WW";
+            whiteText.value = white;
+            whiteText.onchange = () => updateQr();
 
             // Delete Button
             const deleteBtn = document.createElement("button");
@@ -186,20 +181,49 @@
             deleteBtn.textContent = "×";
             deleteBtn.addEventListener("click", () => {
                 const parent = tr.parentElement;
-                if (parent.children.length <= 1 ) return;
+                if (parent.children.length <= 1) return;
                 tr.remove();
                 updateQr();
             });
 
+            // Update Preview
+            function updatePreview() {
+                const rgbHex = rgbText.value;
+                const whiteHex = whiteText.value ?? "00";
+                if (/^[0-9a-fA-F]{6}$/.test(rgbHex)) {
+                    previewBox.style.backgroundColor = ledRgbwToDisplayHex(rgbHex, whiteHex);
+                } else {
+                    previewBox.style.backgroundColor = "#ffffff";
+                }
+            }
+            whiteText.addEventListener("input", updatePreview);
+
+            // Sync
+            function syncFromPicker() {
+                const hex = rgbPicker.value.replace("#", "");
+                rgbText.value = hex;
+                updatePreview();
+            }
+            function syncFromText() {
+                if (/^[0-9a-fA-F]{6}$/.test(rgbText.value)) {
+                    rgbPicker.value = "#" + rgbText.value;
+                    updatePreview();
+                }
+            }
+            rgbPicker.addEventListener("input", syncFromPicker);
+            rgbText.addEventListener("input", syncFromText);
+            syncFromPicker();
+
             // Build TD
             const previewTd = document.createElement("td");
-            previewTd.appendChild(rgbPicker);
+            previewTd.appendChild(previewBox);
 
             const rgbTd = document.createElement("td");
+            rgbTd.appendChild(rgbPicker);
             rgbTd.appendChild(rgbText);
 
             const whiteTd = document.createElement("td");
-            whiteTd.appendChild(whiteInput);
+            whiteTd.appendChild(whiteText);
 
             const deleteTd = document.createElement("td");
             deleteTd.appendChild(deleteBtn);
@@ -292,7 +316,7 @@
             if (!text) return false;
 
             text.split(",").forEach(entry => {
-                const value = entry.trim().replace(/^#/, "");
+                const value = entry.trim().replace(/^#/, "").toLowerCase();
 
                 if (!/^[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(value)) return;
 
@@ -317,6 +341,37 @@
             const lines = getColorLinesFromTable();
             const text = lines.join(",");
             document.getElementById("csv-text").value = text;
+        }
+
+        const LED_GAMMA = 3.0;
+        /**
+         * LED線形RGBカラーコードをディスプレイ用sRGBに変換する
+         * @param {string} hex - "#RRGGBB"
+         * @return {string} "#RRGGBB"
+         */
+        function ledRgbwToDisplayHex(rgbHex, whiteHex) {
+
+            rgbHex = rgbHex.replace(/^#/, '');
+
+            if (!/^[0-9a-fA-F]{6}$/.test(rgbHex)) return "#ffffff";
+            if (!/^[0-9a-fA-F]{2}$/.test(whiteHex)) whiteHex = "00";
+
+            const r = parseInt(rgbHex.slice(0, 2), 16);
+            const g = parseInt(rgbHex.slice(2, 4), 16);
+            const b = parseInt(rgbHex.slice(4, 6), 16);
+            const w = parseInt(whiteHex, 16);
+
+            const rLin = Math.min(255, r + w);
+            const gLin = Math.min(255, g + w);
+            const bLin = Math.min(255, b + w);
+
+            const convert = (v) => Math.round(255 * Math.pow(v / 255, 1 / LED_GAMMA));
+
+            const rr = convert(rLin).toString(16).padStart(2, '0');
+            const gg = convert(gLin).toString(16).padStart(2, '0');
+            const bb = convert(bLin).toString(16).padStart(2, '0');
+
+            return `#${rr}${gg}${bb}`;
         }
 
         // init
